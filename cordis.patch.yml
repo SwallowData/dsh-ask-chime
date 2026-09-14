@@ -1,0 +1,19 @@
+# dsh-ask-chime profile patch layer — insert one loader entry for the plugin
+# package. The entry is a normal cordis loader entry (id + package name), so it
+# installs exactly like the shipped rows and is unwound with the composition.
+#
+# Optional config (all fields default to the values shown):
+#
+# - insert:
+#     - id: ask-chime
+#       name: 'dsh-ask-chime'
+#       config:
+#         enabled: true                 # master switch
+#         questions: true               # chime when the harness asks you something
+#         approvals: true               # chime when an approval prompt reaches you
+#         tones: true                   # Windows only: append the two-tone tail
+#         questionSound: chimes.wav     # platform default, or an absolute path
+#         approvalSound: null           # null = platform default
+- insert:
+    - id: ask-chime
+      name: 'dsh-ask-chime'

@@ -1,0 +1,53 @@
+{
+  "name": "dsh-ask-chime",
+  "version": "0.1.0",
+  "description": "Notification sound for DeepSeek Harness: play a system alert the moment the agent needs to ask you something (ask_user_question / plan review) or an approval prompt reaches you. 提问提示音插件：DSH 需要向你提问时立刻响一声。",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "README.en.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "plugin",
+    "notification",
+    "sound",
+    "chime",
+    "alert",
+    "ask-user-question",
+    "提示音"
+  ],
+  "author": "SwallowData",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SwallowData/dsh-ask-chime.git"
+  },
+  "homepage": "https://github.com/SwallowData/dsh-ask-chime#readme",
+  "bugs": {
+    "url": "https://github.com/SwallowData/dsh-ask-chime/issues"
+  }
+}
