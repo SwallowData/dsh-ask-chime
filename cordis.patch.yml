@@ -8,12 +8,15 @@
 #     - id: ask-chime
 #       name: 'dsh-ask-chime'
 #       config:
-#         enabled: true                 # master switch
-#         questions: true               # chime when the harness asks you something
-#         approvals: true               # chime when an approval prompt reaches you
-#         tones: true                   # Windows only: append the two-tone tail
-#         questionSound: chimes.wav     # platform default, or an absolute path
-#         approvalSound: null           # null = platform default
+#         enabled: true                   # master switch
+#         questions: true                 # chime when the harness asks you something
+#         approvals: true                 # chime when an approval prompt reaches you
+#         completed: true                 # chime when a turn finishes (root agents only)
+#         tones: true                     # Windows only: append the tone tail
+#         minTurnMs: 0                    # skip finished turns shorter than this (0 = always)
+#         questionSound: chimes.wav       # platform default, or an absolute path
+#         approvalSound: null             # null = platform default
+#         completedSound: null            # null = platform default
 - insert:
     - id: ask-chime
       name: 'dsh-ask-chime'

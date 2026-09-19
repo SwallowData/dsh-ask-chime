@@ -24,16 +24,29 @@ class FakeUserQuestions {
   }
 }
 
+/** The agent registry as `install` reads it: root identity, never serialization. */
+function fakeAgents() {
+  const roots = []
+  return {
+    roots: () => roots,
+    promote: (agent) => roots.push(agent),
+  }
+}
+
 /** A minimal cordis context: `get`, `on`, and `effect` are all `install` reaches for. */
 function fakeContext(service = new FakeUserQuestions()) {
   const listeners = new Map()
   const disposers = []
+  const agents = fakeAgents()
   return {
     service,
+    agents,
     listeners,
     ctx: {
       get(serviceName) {
-        return serviceName === 'userQuestions' ? service : undefined
+        if (serviceName === 'userQuestions') return service
+        if (serviceName === 'agents') return agents
+        return undefined
       },
       on(event, listener) {
         listeners.set(event, listener)
@@ -63,9 +76,12 @@ test('resolveOptions defaults every field to on, with no sound override', () => 
     enabled: true,
     questions: true,
     approvals: true,
+    completed: true,
     tones: true,
     questionSound: null,
     approvalSound: null,
+    completedSound: null,
+    minTurnMs: 0,
   })
 })
 
@@ -97,11 +113,19 @@ test('windows reports a silent run through its exit code', () => {
 
 test('a partial options object still resolves the platform default sound', () => {
   // Regression: `buildCommands` is public API, so it must not depend on the
-  // caller having gone through `resolveOptions` first.
+  // caller having gone through `resolveOptions` first — neither for the sound
+  // file nor for the tone tail.
   const script = buildCommands('question', { platform: 'win32' })[0].args.at(-1)
   assert.match(script, /'chimes\.wav'/)
   assert.doesNotMatch(script, /undefined/)
+  assert.match(script, /\[console\]::beep\(1046,150\)/)
   assert.deepEqual(buildCommands('question', { platform: 'darwin' })[0].args, ['/System/Library/Sounds/Glass.aiff'])
+})
+
+test('the tone tail is still dropped when tones is explicitly false', () => {
+  const script = buildCommands('question', { platform: 'win32', tones: false })[0].args.at(-1)
+  assert.doesNotMatch(script, /beep/)
+  assert.match(script, /'chimes\.wav'/)
 })
 
 test('windows drops the tone tail when tones is disabled', () => {
@@ -125,9 +149,9 @@ test('macOS plays a system sound with afplay', () => {
 test('linux tries its players in order against the theme directories', () => {
   const commands = buildCommands('question', { platform: 'linux', ...OPTIONS })
   assert.equal(commands[0].file, 'paplay')
-  assert.equal(commands[0].args[0], '/usr/share/sounds/freedesktop/stereo/complete.oga')
+  assert.equal(commands[0].args[0], '/usr/share/sounds/freedesktop/stereo/dialog-question.oga')
   assert.ok(commands.length >= 3)
-  assert.ok(commands.every((command) => command.args[0].endsWith('complete.oga')))
+  assert.ok(commands.every((command) => command.args[0].endsWith('dialog-question.oga')))
 })
 
 test('an absolute sound override is used as-is instead of being re-rooted', () => {
@@ -294,4 +318,121 @@ test('apply arms both hooks with the default config', () => {
 test('apply warns instead of throwing when the questions seam is missing', () => {
   const ctx = { get: () => undefined, on: () => () => {}, effect: () => () => {} }
   assert.doesNotThrow(() => apply(ctx, undefined))
+})
+
+test('a finished turn chimes once, for a root agent', () => {
+  const { ctx, agents, listeners } = fakeContext()
+  const played = []
+  install(ctx, OPTIONS, (kind) => {
+    played.push(kind)
+    return null
+  })
+
+  const agent = { id: 'session-1' }
+  agents.promote(agent)
+  const status = listeners.get('agent/status')
+  assert.equal(typeof status, 'function')
+
+  status({ agent, status: 'running' })
+  assert.deepEqual(played, [], 'starting work is not a finished turn')
+
+  status({ agent, status: 'idle' })
+  assert.deepEqual(played, ['done'])
+})
+
+test('a subagent settling does not chime', () => {
+  const { ctx, listeners } = fakeContext()
+  const played = []
+  install(ctx, OPTIONS, (kind) => {
+    played.push(kind)
+    return null
+  })
+
+  const subagent = { id: 'sub-1' } // deliberately never promoted to a root
+  listeners.get('agent/status')({ agent: subagent, status: 'running' })
+  listeners.get('agent/status')({ agent: subagent, status: 'idle' })
+  assert.deepEqual(played, [])
+})
+
+test('a malformed status payload is ignored rather than thrown', () => {
+  const { ctx, listeners } = fakeContext()
+  const played = []
+  install(ctx, OPTIONS, (kind) => {
+    played.push(kind)
+    return null
+  })
+
+  const status = listeners.get('agent/status')
+  for (const payload of [undefined, null, {}, { agent: null, status: 'idle' }, { agent: { id: 'x' } }]) {
+    assert.doesNotThrow(() => status(payload))
+  }
+  assert.deepEqual(played, [])
+})
+
+test('completed:false silences the finished-turn chime only', () => {
+  const { ctx, listeners, service } = fakeContext()
+  const played = []
+  install(ctx, resolveOptions({ completed: false }), (kind) => {
+    played.push(kind)
+    return null
+  })
+
+  assert.equal(listeners.has('agent/status'), false)
+  service.ask({ questions: [] })
+  assert.deepEqual(played, ['question'])
+})
+
+test('minTurnMs suppresses a turn shorter than the gate', () => {
+  const gated = fakeContext()
+  const played = []
+  // A gate far beyond this suite's own runtime: every turn is "too short".
+  install(gated.ctx, resolveOptions({ minTurnMs: 60000 }), (kind) => {
+    played.push(kind)
+    return null
+  })
+
+  const agent = { id: 'session-2' }
+  gated.agents.promote(agent)
+  gated.listeners.get('agent/status')({ agent, status: 'running' })
+  gated.listeners.get('agent/status')({ agent, status: 'idle' })
+  assert.deepEqual(played, [])
+
+  // With the gate off, the same sequence chimes.
+  const open = fakeContext()
+  const replayed = []
+  install(open.ctx, OPTIONS, (kind) => {
+    replayed.push(kind)
+    return null
+  })
+
+  const other = { id: 'session-3' }
+  open.agents.promote(other)
+  open.listeners.get('agent/status')({ agent: other, status: 'running' })
+  open.listeners.get('agent/status')({ agent: other, status: 'idle' })
+  assert.deepEqual(replayed, ['done'])
+})
+
+test('the done alert is a distinct sound and a three-note arpeggio', () => {
+  const windows = buildCommands('done', { platform: 'win32', ...OPTIONS })[0].args.at(-1)
+  assert.match(windows, /Windows Print complete\.wav/)
+  assert.match(windows, /beep\(784,150\)/)
+  assert.match(windows, /beep\(988,150\)/)
+  assert.match(windows, /beep\(1319,320\)/)
+
+  assert.deepEqual(buildCommands('done', { platform: 'darwin', ...OPTIONS })[0].args, ['/System/Library/Sounds/Hero.aiff'])
+  assert.equal(buildCommands('done', { platform: 'linux', ...OPTIONS })[0].args[0], '/usr/share/sounds/freedesktop/stereo/complete.oga')
+})
+
+test('the three alerts never share a sound on any platform', () => {
+  for (const platform of ['win32', 'darwin', 'linux']) {
+    const sounds = ['question', 'approval', 'done'].map((kind) => buildCommands(kind, { platform, ...OPTIONS })[0].args.at(-1))
+    assert.equal(new Set(sounds).size, 3, platform + ' must not reuse a sound across alerts')
+  }
+})
+
+test('an unknown alert kind falls back to the question alert', () => {
+  assert.deepEqual(
+    buildCommands('nonsense', { platform: 'darwin', ...OPTIONS })[0].args,
+    buildCommands('question', { platform: 'darwin', ...OPTIONS })[0].args,
+  )
 })

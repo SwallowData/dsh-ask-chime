@@ -1,7 +1,7 @@
 {
   "name": "dsh-ask-chime",
-  "version": "0.1.0",
-  "description": "Notification sound for DeepSeek Harness: play a system alert the moment the agent needs to ask you something (ask_user_question / plan review) or an approval prompt reaches you. 提问提示音插件：DSH 需要向你提问时立刻响一声。",
+  "version": "0.2.0",
+  "description": "Notification sounds for DeepSeek Harness: a system alert when the agent needs to ask you something (ask_user_question / plan review), when an approval prompt reaches you, and when a turn finishes. 提示音插件：提问、审批、工作完成各响一声。",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -38,6 +38,7 @@
     "chime",
     "alert",
     "ask-user-question",
+    "turn-finished",
     "提示音"
   ],
   "author": "SwallowData",
